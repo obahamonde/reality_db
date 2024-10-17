@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from functools import cached_property
 from typing import Any, Dict, List, Optional, Union
 
 import base64c as base64  # type: ignore
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 from rocksdict import Rdict as Rdict  # pylint: disable=E0611
 from typing_extensions import Literal, Required, Self, TypeAlias, TypedDict
 
@@ -26,6 +25,10 @@ GlowMethod: TypeAlias = Literal[
     "BatchGetItem",
     "BatchWriteItem",
     "UpdateItem",
+    "AddToVectorStore",
+    "DeleteFromVectorStore",
+    "SearchVectorStore",
+    "UpdateInVectorStore",
 ]
 
 
@@ -66,11 +69,6 @@ class DocumentObject(BaseModel):
         "arbitrary_types_allowed": True,
         "extra": "allow",
     }
-
-    @computed_field(return_type=str)
-    @cached_property
-    def object(self) -> str:
-        return self.__class__.__name__.lower()
 
     @classmethod
     @asyncify

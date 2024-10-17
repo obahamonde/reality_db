@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "realitydb"
-version = "0.0.1"
+version = "0.0.2"
 description = "RPC, WebSocket Server, JSON RPC 2.0, OpenAPI, Swagger UI"
 authors = ["Oscar Bahamonde <oscar@perudevlabs.com>"]
 readme = "README.md"
@@ -25,6 +25,9 @@ openpyxl = "^3.1.5"
 cbase64 = "^0.0.9"
 click = "^8.1.7"
 fastapi = {extras = ["all"], version = "^0.115.2"}
+sentence-transformers = "^3.2.0"
+faiss-cpu = "^1.9.0"
+pypdf2 = "^3.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
