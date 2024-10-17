@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  db:
+    container_name: db
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8765:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    networks:
+      - app-network
+    depends_on:
+      - minio
+
+  minio:
+    container_name: minio
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # MinIO console port
+    volumes:
+      - minio_data:/data
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  minio_data:
+    driver: local

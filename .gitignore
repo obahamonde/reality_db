@@ -1,0 +1,205 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+.env
+# Distribution / packaging
+*.key
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+html
+*.lock
+# PyInstaller
+# Usually these files are written by a python script from a template
+# before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+*.mocha.json
+*.html
+*.svg
+.pytest_cache/
+__pycache__/
+
+# Jupyter Notebook files
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+.env
+ssh.key
+# pyenv
+# For a library or package, you might want to ignore these files since the code is supposed to run in multiple environments; otherwise, check this in:
+# .python-version
+
+# pipenv
+# According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+# However, in case you need to ignore it, use the following line:
+# Pipfile.lock
+# 
+# Ignore other pipenv related files
+Pipfile
+Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# dotenv
+.env
+.env.*
+*.env
+*.venv
+
+# virtualenv
+# If you have virtualenv tools or environments installed in your project, you can ignore them:
+venv/
+ENV/
+env/
+.venv/
+env.bak/
+env/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Data and logs
+data/
+datasets/
+logs/
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Local configuration
+local_config.py
+
+# Models
+models/
+
+# Saved model files
+*.h5
+*.hdf5
+*.pkl
+*.joblib
+
+# TFRecords
+*.tfrecord
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.out
+*.pid
+
+# Other temporary files
+*.swp
+*.swo
+*.bak
+*.backup
+*.old
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+.project
+.settings/
+.metadata/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Anaconda environments
+.envs/
+.conda/
+.condarc
+.conda-env/
+__pycache__/
+__pypackages__/
+.cache/
+.cargo/
+node_modules/
+
+# Jupyter Notebook runtime files
+runtime/
+
+# Mac specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux specific files
+.Trash-* 
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+ssh.key
