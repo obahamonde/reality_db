@@ -74,7 +74,6 @@ async def run_server_(
         raise
 
 
-# Update the run_server function to use the new run_server_
 def run_server():
     try:
         args = sys.argv[1:]

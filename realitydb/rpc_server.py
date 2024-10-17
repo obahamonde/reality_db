@@ -1,93 +1,156 @@
-import asyncio
-import json
-from typing import Any, Dict, List, Type, TypeVar
+from typing import Any, Dict, List, TypeVar
+from uuid import UUID, uuid4
 
-import websockets
-from websockets.server import WebSocketServerProtocol
-
-from realitydb import DocumentObject, RPCError
-from realitydb.utils import get_logger
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing_extensions import Required, TypedDict
+from realitydb.models import (
+    DocumentObject,
+    GlowMethod,
+    JsonObject,
+)
+from realitydb.utils import RPCError, get_logger
 
 logger = get_logger(__name__)
 
 T = TypeVar("T", bound=DocumentObject)
 
 
-class RPCServer:
-    def __init__(
-        self, document_classes: List[Type[T]], host: str = "localhost", port: int = 8888
-    ):
-        self.document_classes = {cls.__name__: cls for cls in document_classes}
-        self.host = host
-        self.port = port
+class Property(TypedDict, total=False):
+    id: str
+    item: JsonObject
+    items: List[JsonObject]
+    filters: Dict[str, Any]
+    limit: int
+    offset: int
+    updates: List[Dict[str, Any]]
 
-    async def handle_request(self, websocket: WebSocketServerProtocol, path: str):
+
+class RPCRequest(TypedDict, total=False):
+    method: Required[GlowMethod]
+    properties: Required[Property]
+    id: Required[UUID]
+
+
+class RPCServer(FastAPI):
+    def __init__(
+        self,
+        title: str = "RealityDB",
+        description: str = "RealityDB",
+        version: str = "0.1.0",
+    ):
+        super().__init__(
+            title=title,
+            description=description,
+            version=version,
+            debug=True,
+        )
+
+        @self.websocket("/{path:path}")
+        async def _(ws: WebSocket, path: str):
+            await self.handler(ws, path)
+
+    async def handler(self, ws: WebSocket, path: str):
+        await ws.accept()
+        logger.info(f"New WebSocket connection: {path}")
+
         try:
-            async for message in websocket:
-                request = json.loads(message)
-                method = request.get("method")
-                params = request.get("params", {})
-                request_id = request.get("id")
-                document_type = params.get("document_type")
+            while True:
+                data_dict: RPCRequest = await ws.receive_json()
+                logger.info(f"Received: {data_dict}")
+
+                method = data_dict.get("method", "PutItem")
+                properties = data_dict.get("properties", {})
+                request_id = data_dict.get("id", uuid4())
 
                 try:
-                    result = await self.dispatch_method(method, params, document_type)
-                    response = {"jsonrpc": "2.0", "result": result, "id": request_id}
+                    response = await self.dispatch(method, properties,path)
+                    await ws.send_json(
+                        {
+                            "id": str(request_id),
+                            "result": response,
+                            "status": "success",
+                        }
+                    )
                 except RPCError as e:
-                    response = {
-                        "jsonrpc": "2.0",
-                        "error": {"code": e.code, "message": str(e)},
-                        "id": request_id,
-                    }
-                except Exception as e:
-                    logger.exception(f"Unexpected error: {e}")
-                    response = {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32603, "message": "Internal error"},
-                        "id": request_id,
-                    }
+                    await ws.send_json(
+                        {
+                            "id": str(request_id),
+                            "error": {"code": e.code, "message": e.message},
+                            "status": "error",
+                        }
+                    )
 
-                await websocket.send(json.dumps(response))
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("WebSocket connection closed")
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected: {path}")
+        except Exception as e:
+            logger.error(f"Error in WebSocket handler: {e}")
+            await ws.close()
 
-    async def dispatch_method(
-        self, method: str, params: Dict[str, Any], document_type: str
-    ) -> Any:
-        if document_type not in self.document_classes:
-            raise RPCError(
-                code=-32602, message=f"Invalid document type: {document_type}"
-            )
-
-        document_class = self.document_classes[document_type]
-
+    async def dispatch(self, method: GlowMethod, properties: Property,prefix:str):
+        result = None
+        table_name: str = properties.get("table_name", str(uuid4()))
         if method == "CreateTable":
-            return await document_class.create_table(**params)
+            result =await DocumentObject.create_table(
+                prefix=prefix, table_name=table_name
+            )
         elif method == "DeleteTable":
-            return await document_class.delete_table(**params)
+            result =await DocumentObject.delete_table(
+                prefix=prefix, table_name=table_name
+            )
         elif method == "GetItem":
-            return await document_class.get_item(**params)
+            assert "id" in properties, "id is required"
+            item_id = properties["id"]
+            result = await DocumentObject.get_item(
+                prefix=prefix, table_name=table_name, item_id=item_id
+            )
         elif method == "PutItem":
-            item = document_class(**params["item"])
-            return await item.put_item(table_name=params["table_name"])
+            item = DocumentObject(**properties["item"])  # type: ignore
+            result = await item.put_item(prefix=prefix, table_name=table_name)
         elif method == "DeleteItem":
-            return await document_class.delete_item(**params)
+            assert "id" in properties, "id is required"
+            item_id = properties["id"]
+            return await DocumentObject.delete_item(
+                prefix=prefix, table_name=table_name, item_id=item_id
+            )
+        elif method == "Scan":
+            result = await DocumentObject.scan(prefix=prefix, table_name=table_name)
         elif method == "Query":
-            return await document_class.query(**params)
+            filters = properties.get("filters", {})
+            limit = properties.get("limit", 25)
+            offset = properties.get("offset", 0)
+            result = await DocumentObject.query(
+                prefix=prefix,
+                table_name=table_name,
+                filters=filters,
+                limit=limit,
+                offset=offset,
+            )
+        elif method == "BatchGetItem":
+            ids = properties["ids"]  # type: ignore
+            result = await DocumentObject.batch_get_item(
+                prefix=prefix, table_name=table_name, ids=ids
+            )
+        elif method == "BatchWriteItem":
+            items = [DocumentObject(**item) for item in properties["items"]]  # type: ignore
+            result = await DocumentObject.batch_write_item(
+                prefix=prefix, table_name=table_name, items=items
+            )
         elif method == "UpdateItem":
-            return await document_class.update_item(**params)
+            item_id = properties.get("id", str(uuid4()))
+            updates = properties.get("updates", [])
+            result = await DocumentObject.update_item(
+                prefix=prefix,
+                table_name=table_name,
+                item_id=item_id,
+                updates=updates,
+            )
+        if result is None:
+            return {}
+        if isinstance(result,dict):
+            return result
+        if isinstance(result,list):
+            return [item.model_dump() for item in result]
+        if isinstance(result,DocumentObject):
+            return result.model_dump()
         else:
-            raise RPCError(code=-32601, message=f"Method '{method}' not found")
-
-    async def start(self):
-        server = await websockets.serve(self.handle_request, self.host, self.port)
-        logger.info(f"Multi-Document RPC Server started on {self.host}:{self.port}")
-        logger.info(
-            f"Serving document types: {', '.join(self.document_classes.keys())}"
-        )
-        await server.wait_closed()
-
-
-def run(document_classes: List[Type[T]], host: str = "localhost", port: int = 8888):
-    server = RPCServer(document_classes, host, port)
-    asyncio.run(server.start())
+            raise RPCError(code=400, message=f"Unsupported method: {method}")
