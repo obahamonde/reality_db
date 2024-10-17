@@ -18,7 +18,16 @@ JsonObject: TypeAlias = Union[
     Dict[str, Any], List[Dict[str, Any]], str, int, float, bool, None
 ]
 GlowMethod: TypeAlias = Literal[
-   "CreateTable", "DeleteTable", "GetItem", "PutItem", "DeleteItem", "Scan", "Query", "BatchGetItem", "BatchWriteItem", "UpdateItem"
+    "CreateTable",
+    "DeleteTable",
+    "GetItem",
+    "PutItem",
+    "DeleteItem",
+    "Scan",
+    "Query",
+    "BatchGetItem",
+    "BatchWriteItem",
+    "UpdateItem",
 ]
 
 
@@ -150,19 +159,4 @@ class DocumentObject(BaseModel):
         key = item_id.encode("utf-8")
         item_data = db.get(key)
         if item_data is None:
-            raise RPCError(message="Item with id '%s' not found" % item_id)
-        item = cls.model_validate_json(item_data.decode("utf-8"))
-        assert isinstance(item, dict)
-        for field, value in updates:  # type: ignore
-            setattr(item, field, value)
-        db[key] = item.model_dump_json().encode("utf-8")
-        return item
-
-
-DocumentObject.model_rebuild()
-
-
-class Error(TypedDict, total=False):
-    code: Required[int]
-    message: Required[str]
-    data: Required[JsonObject]
+            raise RPCError(message="Item with id '%s'
