@@ -1,6 +1,6 @@
 # RealityDB
 
-![Cover](./images/landspace.jpeg)
+![Cover](images/landspace.jpeg)
 
 RealityDB is a document-oriented database built on top of `rocksdb`, enhanced by Python extensions such as `base64c`, `orjson`, and `rocksdict` for performance-critical operations. It leverages `pydantic` and `OpenAPI` specifications for seamless data management. By accepting a single `OpenAPI` specification, RealityDB can generate the corresponding Python classes and methods for data handling.
 
