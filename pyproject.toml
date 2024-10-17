@@ -36,8 +36,6 @@ pre-commit = "^3.4.0"
 autopep8 = "^2.0.4"
 ruff = "^0.6.9"
 
-[tool.poetry.scripts]
-db = "realitydb.rpc_server:app"
 
 [build-system]
 requires = ["poetry-core"]
@@ -70,3 +68,6 @@ exclude = ".venv,dist,build,*.egg-info"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=realitydb --cov-report=term-missing"
+
+[tool.poetry.scripts]
+realitydb = "cli:run_server"

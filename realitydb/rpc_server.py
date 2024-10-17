@@ -1,134 +1,86 @@
-from __future__ import annotations
-
 import asyncio
-import random
-from abc import ABC, abstractmethod
-from string import ascii_letters, digits, punctuation
-from typing import Any, Dict, Generic, List, Type, TypeVar, Union
-from uuid import uuid4
+import json
+from typing import Dict, Any, Type, TypeVar, List
+import websockets
+from websockets.server import WebSocketServerProtocol
 
-import base64c as base64  # type: ignore
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, WebSocketException
-from pydantic import BaseModel, Field  # type: ignore
-
-from .models import DocumentObject, GlowMethod
-from .utils import get_logger
+from realitydb import DocumentObject, RPCError
+from realitydb.utils import get_logger
 
 logger = get_logger(__name__)
 
-# Type Aliases
-DataObject = Union[
-    Dict[str, Any],
-    List[Dict[str, Any]],
-    str,
-    int,
-    float,
-    bool,
-    DocumentObject,
-    List[DocumentObject],
-    None,
-]
+T = TypeVar('T', bound=DocumentObject)
 
-O = TypeVar("O", bound=DocumentObject)
+class RPCServer:
+    def __init__(self, document_classes: List[Type[T]], host: str = 'localhost', port: int = 8888):
+        self.document_classes = {cls.__name__: cls for cls in document_classes}
+        self.host = host
+        self.port = port
 
-STRINGS = ascii_letters + digits + punctuation
+    async def handle_request(self, websocket: WebSocketServerProtocol, path: str):
+        try:
+            async for message in websocket:
+                request = json.loads(message)
+                method = request.get('method')
+                params = request.get('params', {})
+                request_id = request.get('id')
+                document_type = params.get('document_type')
 
+                try:
+                    result = await self.dispatch_method(method, params, document_type)
+                    response = {
+                        'jsonrpc': '2.0',
+                        'result': result,
+                        'id': request_id
+                    }
+                except RPCError as e:
+                    response = {
+                        'jsonrpc': '2.0',
+                        'error': {'code': e.code, 'message': str(e)},
+                        'id': request_id
+                    }
+                except Exception as e:
+                    logger.exception(f"Unexpected error: {e}")
+                    response = {
+                        'jsonrpc': '2.0',
+                        'error': {'code': -32603, 'message': 'Internal error'},
+                        'id': request_id
+                    }
 
-def random_string(length: int) -> str:
-    return "".join(random.choices(STRINGS, k=length))
+                await websocket.send(json.dumps(response))
+        except websockets.exceptions.ConnectionClosed:
+            logger.info("WebSocket connection closed")
 
+    async def dispatch_method(self, method: str, params: Dict[str, Any], document_type: str) -> Any:
+        if document_type not in self.document_classes:
+            raise RPCError(code=-32602, message=f"Invalid document type: {document_type}")
 
-def random_id() -> int:
-    return random.randint(0, 2**64 - 1)
+        document_class = self.document_classes[document_type]
+        
+        if method == 'CreateTable':
+            return await document_class.create_table(**params)
+        elif method == 'DeleteTable':
+            return await document_class.delete_table(**params)
+        elif method == 'GetItem':
+            return await document_class.get_item(**params)
+        elif method == 'PutItem':
+            item = document_class(**params['item'])
+            return await item.put_item(table_name=params['table_name'])
+        elif method == 'DeleteItem':
+            return await document_class.delete_item(**params)
+        elif method == 'Query':
+            return await document_class.query(**params)
+        elif method == 'UpdateItem':
+            return await document_class.update_item(**params)
+        else:
+            raise RPCError(code=-32601, message=f"Method '{method}' not found")
 
+    async def start(self):
+        server = await websockets.serve(self.handle_request, self.host, self.port)
+        logger.info(f"Multi-Document RPC Server started on {self.host}:{self.port}")
+        logger.info(f"Serving document types: {', '.join(self.document_classes.keys())}")
+        await server.wait_closed()
 
-class Request(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    data: DataObject = Field(default=None)
-    method: GlowMethod
-
-    model_config = {
-        "json_encoders": {
-            DocumentObject: lambda v: v.model_dump_json(),
-            bytes: lambda v: base64.b64encode(v).decode(),
-        },
-        "arbitrary_types_allowed": True,
-        "extra": "allow",
-    }
-
-
-class RPCResponse(BaseModel, Generic[O]):
-    id: str
-    error: DataObject = Field(default={})
-    data: O | list[O] = Field(default=[])
-
-    @classmethod
-    def __class_getitem__(cls, item: Type[O]):  # type: ignore
-        cls.model = item
-        return cls
-
-    model_config = {
-        "json_encoders": {
-            DocumentObject: lambda v: v.model_dump_json(),
-            bytes: lambda v: base64.b64encode(v).decode(),
-        },
-        "arbitrary_types_allowed": True,
-        "extra": "allow",
-    }
-
-
-class AbstractRPCHandler(APIRouter, Generic[O], ABC):
-    model: Type[O]
-
-    @classmethod
-    def __class_getitem__(cls, item: Type[O]):
-        cls.model = item
-        return cls
-
-    @abstractmethod
-    async def handler(
-        self, *, websocket: WebSocket, path: GlowMethod, instance: O | None = None
-    ) -> O | list[O]:
-        ...
-
-    async def serve(self, *, websocket: WebSocket, method: GlowMethod):
-        while True:
-            await websocket.accept()
-            try:
-                data = await websocket.receive_json(mode="json")
-                instance = self.model(**data) if data else None
-                response = await self.handler(
-                    websocket=websocket, path=method, instance=instance
-                )
-
-                if isinstance(response, list):
-                    await asyncio.gather(
-                        *[
-                            websocket.send_json(r.model_dump(), mode="json")
-                            for r in response
-                        ]
-                    )
-                else:
-                    await websocket.send_json(response.model_dump(), mode="json")
-                await asyncio.sleep(0.1)
-            except (WebSocketDisconnect, WebSocketException) as e:
-                logger.error("Error in RPC server: %s", e)
-                break
-            except Exception as e:
-                logger.error("Unexpected error in RPC server: %s", e)
-                break
-            finally:
-                await websocket.close()
-
-
-class Skill(DocumentObject):
-    level: int
-    label: str
-
-
-class RPCServer(AbstractRPCHandler[Skill]):
-    async def handler(
-        self, *, websocket: WebSocket, path: GlowMethod, instance: Skill | None = None
-    ) -> Skill | list[Skill]:
-        return Skill(label=random_string(64), level=random.randint(0, 2**63))
-
+def run(document_classes: List[Type[T]], host: str = 'localhost', port: int = 8888):
+    server = RPCServer(document_classes, host, port)
+    asyncio.run(server.start())

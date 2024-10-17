@@ -40,8 +40,7 @@ lint:
 	poetry run isort .
 .PHONY: run-dev
 run-dev:
-	poetry run uvicorn realitydb.rpc_server:app --reload --port $(PORT)
-
+	poetry run uvicorn main:app --reload --port $(PORT) --host 0.0.0.0
 # CODE: Manage dependencies and environments
 .PHONY: install
 install:
@@ -119,3 +118,25 @@ health-check:
 .PHONY: metrics
 metrics:
 	docker stats --no-stream $(shell docker ps -q --filter "name=$(APP)")
+
+
+# ... (previous Makefile content)
+
+# PUBLISH: Build and publish the package to PyPI
+.PHONY: publish
+publish:
+	@if [ -z "$$PYPI_TOKEN" ]; then \
+		echo "Error: PYPI_TOKEN environment variable is not set"; \
+		echo "Please set the PYPI_TOKEN environment variable with your PyPI API token"; \
+		exit 1; \
+	fi
+	@echo "Building the package..."
+	poetry build
+	@echo "Publishing to PyPI..."
+	poetry config pypi-token.pypi $$PYPI_TOKEN
+	poetry publish
+	@echo "Package published successfully!"
+	@echo "Cleaning up..."
+	poetry config --unset pypi-token.pypi
+
+# ... (rest of the Makefile)

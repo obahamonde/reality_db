@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import base64c as base64  # type: ignore
 from pydantic import BaseModel, Field, computed_field
-from rocksdict import Rdict as Rdict  # type: ignore
+from rocksdict import Rdict as Rdict  # pylint: disable=E0611
 from typing_extensions import Literal, Required, Self, TypeAlias, TypedDict
 
 from .utils import RPCError, asyncify
@@ -18,15 +18,7 @@ JsonObject: TypeAlias = Union[
     Dict[str, Any], List[Dict[str, Any]], str, int, float, bool, None
 ]
 GlowMethod: TypeAlias = Literal[
-    "Select",
-    "Insert",
-    "Update",
-    "Delete",
-    "CreateTable",
-    "DescribeTable",
-    "DescribeIndex",
-    "BatchGetItem",
-    "BatchWriteItem",
+   "CreateTable", "DeleteTable", "GetItem", "PutItem", "DeleteItem", "Scan", "Query", "BatchGetItem", "BatchWriteItem", "UpdateItem"
 ]
 
 
@@ -50,7 +42,7 @@ class DocumentObject(BaseModel):
 
     @classmethod
     @asyncify
-    def create_table(cls, table_name: str) -> Dict[str, str]:
+    def create_table(cls, *, table_name: str) -> Dict[str, str]:
         try:
             get_db(table_name)
             return {"message": "Table %s created successfully" % table_name}
@@ -59,7 +51,7 @@ class DocumentObject(BaseModel):
 
     @classmethod
     @asyncify
-    def delete_table(cls, table_name: str) -> Dict[str, str]:
+    def delete_table(cls, *, table_name: str) -> Dict[str, str]:
         try:
             db = get_db(table_name)
             db.destroy(PREFIX + table_name)
@@ -69,7 +61,7 @@ class DocumentObject(BaseModel):
 
     @classmethod
     @asyncify
-    def get_item(cls, table_name: str, item_id: str) -> Self:
+    def get_item(cls, *, table_name: str, item_id: str) -> Self:
         db = get_db(table_name)
         item = db.get(item_id.encode("utf-8"))
         if item is None:
@@ -77,14 +69,14 @@ class DocumentObject(BaseModel):
         return cls.model_validate_json(item.decode("utf-8"))
 
     @asyncify
-    def put_item(self, table_name: str) -> Self:
+    def put_item(self, *, table_name: str) -> Self:
         db = get_db(table_name)
         db[self.id] = self.model_dump_json().encode("utf-8")
         return self
 
     @classmethod
     @asyncify
-    def delete_item(cls, table_name: str, item_id: str) -> Dict[str, str]:
+    def delete_item(cls, *, table_name: str, item_id: str) -> Dict[str, str]:
         db = get_db(table_name)
         key = item_id.encode("utf-8")
         if key not in db:
@@ -93,7 +85,7 @@ class DocumentObject(BaseModel):
         return {"message": f"Item '{item_id}' deleted successfully"}
 
     @classmethod
-    async def scan(cls, table_name: str) -> List[Self]:
+    async def scan(cls, *, table_name: str) -> List[Self]:
         db = get_db(table_name)
         items: List[Self] = []
         iterable = db.iter()
@@ -108,6 +100,7 @@ class DocumentObject(BaseModel):
     @asyncify
     def query(
         cls,
+        *,
         table_name: str,
         filters: Optional[Dict[str, Any]] = None,
         limit: int = 25,
@@ -135,17 +128,23 @@ class DocumentObject(BaseModel):
         return items
 
     @classmethod
-    async def batch_get_item(cls, table_name: str, ids: List[str]) -> List[Self]:
-        return await asyncio.gather(*[cls.get_item(table_name, id) for id in ids])
+    async def batch_get_item(cls, *, table_name: str, ids: List[str]) -> List[Self]:
+        return await asyncio.gather(
+            *[cls.get_item(table_name=table_name, item_id=id) for id in ids]
+        )
 
     @classmethod
-    async def batch_write_item(cls, table_name: str, items: List[Self]) -> List[Self]:
-        return await asyncio.gather(*[item.put_item(table_name) for item in items])
+    async def batch_write_item(
+        cls, *, table_name: str, items: List[Self]
+    ) -> List[Self]:
+        return await asyncio.gather(
+            *[item.put_item(table_name=table_name) for item in items]
+        )
 
     @classmethod
     @asyncify
     def update_item(
-        cls, table_name: str, item_id: str, updates: list[Dict[str, Any]]
+        cls, *, table_name: str, item_id: str, updates: list[Dict[str, Any]]
     ) -> Self:
         db = get_db(table_name)
         key = item_id.encode("utf-8")
